@@ -222,9 +222,11 @@ data.AREA.value_counts()
 # We plot SALE_COND V/S SALES Price to See the Relationship of the Feature.
 sns.barplot(x='SALE_COND',y="SALES_PRICE",data=data,order=data.groupby('SALE_COND')['SALES_PRICE'].mean().reset_index().sort_values('SALES_PRICE')['SALE_COND'])
 
-"""From the above we see that the SALE_COND has no Relationship with the SALE_PRICE, Hence we can drop this feature. """
+"""From the above we see that the SALE_COND has Linear Relationship with the SALE_PRICE, Hence we can do Label Encoding for this feature. """
 
-data.drop(columns=['SALE_COND'],inplace=True)
+data.SALE_COND=data.SALE_COND.map({"Partial":1,"Family":2,"AbNormal":3,"Normal Sale":4,"Adj Land":5})
+
+data.SALE_COND.value_counts()
 
 """**PARK_FACIL**"""
 
@@ -260,7 +262,21 @@ data.UTILITY_AVAIL=data.UTILITY_AVAIL.map({'ELO':1,'NoSeWa':2,'All Pub':3})
 
 data.UTILITY_AVAIL.value_counts()
 
-"""**STREET**"""
+"""**N_BEDROOM**"""
+
+sns.barplot(x='N_BEDROOM',y='SALES_PRICE',data=data,order=data.groupby('N_BEDROOM')['SALES_PRICE'].mean().reset_index().sort_values('SALES_PRICE')['N_BEDROOM'])
+
+"""From the above chart we see that, N_BEDROOM has the relationship with the SALES_PRICE but there is non linear relarionship.
+
+**N_ROOM**
+"""
+
+sns.barplot(x='N_ROOM',y='SALES_PRICE',data=data,order=data.groupby('N_ROOM')['SALES_PRICE'].mean().reset_index().sort_values('SALES_PRICE')['N_ROOM'])
+
+"""From the above chart we see that, N_ROOM has the relationship with the SALES_PRICE but there is non linear relarionship.
+
+**STREET**
+"""
 
 # We plot STREET V/S SALES Price to See the Relationship of the Feature.
 sns.barplot(x='STREET',y="SALES_PRICE",data=data,order=data.groupby('STREET')['SALES_PRICE'].mean().reset_index().sort_values('SALES_PRICE')['STREET'])
@@ -274,11 +290,11 @@ data.STREET=data.STREET.map({"No Access":1,"Paved":2,"Gravel":3})
 # We plot MZZONE V/S SALES Price to See the Relationship of the Feature.
 sns.barplot(x='MZZONE',y="SALES_PRICE",data=data,order=data.groupby('MZZONE')['SALES_PRICE'].mean().reset_index().sort_values('SALES_PRICE')['MZZONE'])
 
-"""From the above chart we see that, MZZONE has the Non-Linear-relationship with the SALES_PRICE, Hence we will do One-Hot Encoding for this."""
+"""From the above chart we see that, MZZONE has the Slight-Linear-relationship with the SALES_PRICE, Hence we will do Label Encoding for this."""
 
-data=pd.concat([data,pd.get_dummies(data.MZZONE)],axis=1)
+data.MZZONE=data.MZZONE.map({"A":1,"C":2,"I":3,"RH":4,"RL":5,"RM":6})
 
-data.drop(columns=['MZZONE'],inplace=True)
+data.MZZONE.value_counts()
 
 """**We Encode the DATE_BUILD & DATE_SALE with year alone.EX: 01-05-2017 to 2017.Because we are going to predict the Price range of the house, and price won't change drastically within a year.**"""
 
@@ -290,105 +306,99 @@ data['DATE_SALE']=data['DATE_SALE'].dt.year
 data['BUILDING_AGE']=data['DATE_SALE']-data['DATE_BUILD']
 data['PRICE_PER_SQFT']=(data['SALES_PRICE']/data['INT_SQFT']).astype(int)
 
+"""Lets Compare BUILDING_AGE v/s PRICE_PER_SQFT"""
+
+sns.lineplot(x='BUILDING_AGE',y='PRICE_PER_SQFT',data=data)
+
+"""In the above chart we see that the PRICE_PER_SQFT is getting reduced by age of the building. Building age is much related to the SALES_PRICE.
+
+We added a new column 'PRICE_PER_SQFT', and we can use this as a Target instead of 'SALES_PRICE'. We will get better idea when we know the Price per Square feet House. Hence Will drop the SALES_PRICE column.
+"""
+
+data.drop(columns=['SALES_PRICE'],inplace=True)
+
+"""In Data we are having COMMIS (Commission) & REG_FEE (Registration Fee) columns and these values will be calculated based on the Sales price of the house. Hence these columns are not require to build the model, So we can renove these columns."""
+
+data.drop(columns=['COMMIS'],inplace=True)
+data.drop(columns=['REG_FEE'],inplace=True)
+
 data.head()
 
-"""**We added two columns and due to One-Hot Encoding few Columns got created,and our target column SALES_PRICE is in the middle of our table.To get the better look we will move the SALES_PRICE column to the last.**"""
-
-sale=data.pop('SALES_PRICE')
 data.head()
-
-data.insert(28,"SALES_PRICE",sale)
-
-data
 
 """# **Spliting the Training and Test data**"""
 
+features=data.columns[:21]
+features
+
 from sklearn.model_selection import train_test_split
-features=data.columns[:28]
 x=data[features]
-y=data['SALES_PRICE']
+y=data['PRICE_PER_SQFT']
 X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=1)
 df=X_test
-
-"""**Scaling the Data**"""
 
 from sklearn.preprocessing import StandardScaler
 sc = StandardScaler()
 X_train = sc.fit_transform(X_train) 
 X_test = sc.transform(X_test)
 
-"""**Function for DecisionTree Regression**
+"""# **Model Building**
 
-# **Model Building**
+**Function for DecisionTree Regression**
 """
 
 from sklearn.tree import DecisionTreeRegressor
-
-def decision_tree_reg(X_train,y_train,X_test,y_test):
-  try:
-    previous=-5
-    model = DecisionTreeRegressor(max_depth = 1) 
-    for i in range(1,51):
-      model = DecisionTreeRegressor(max_depth = i) # initialise the model
-      model.fit(X_train,y_train) #train the model
-      # scoring the model - r2 squared
-      test_score=model.score(X_test, y_test)
-      print("Max Depth : ", i, " Train score : ", model.score(X_train,y_train)," Test Score: ",test_score)
-      if test_score > model.score(X_train,y_train) or previous > test_score:
-        model = DecisionTreeRegressor(max_depth = i-1)
-        model.fit(X_train,y_train) 
-        print("Max Depth : ", (i-1), " Train score : ", model.score(X_train,y_train)," Test Score: ",model.score(X_test, y_test))
-        break
-      previous=test_score
-    return model
-  except Exception as e:
-    print(str(e))
+def dt_model():
+  dt_best_depth=pd.DataFrame(columns=['Cross_val','Learning_rate'])
+  for i in range(1,21):
+    model = DecisionTreeRegressor(max_depth = i) # initialise the model
+    model.fit(X_train,y_train) #train the model
+    # scoring the model - r2 squared
+    dt_best_depth.loc[model.score(X_test, y_test)]=[model.score(X_test, y_test),i]
+    print("Max Depth : ", i, " Train score : ", model.score(X_train,y_train)," Test Score: ",model.score(X_test, y_test))
+    dt_best_depth
+  best_depth=dt_best_depth.loc[dt_best_depth.Cross_val.max()][1]
+  print("best_depth:",best_depth)
+  descision_tree_model=DecisionTreeRegressor(max_depth=int(best_depth))
+  descision_tree_model.fit(X_train,y_train)
+  descision_tree_model.score(X_test,y_test)
+  return descision_tree_model
 
 """**Function for RandomForest Regression**"""
 
 from sklearn.ensemble import RandomForestRegressor
-import math
-def random_forest_reg(X_train,y_train):
-  try:
-    num_of_features=len(X_train[0])
-    depth=round(math.log(num_of_features,2)) # Depth Calulated Based on log(No.of.Features)/log(2)
-    random_forest_model = RandomForestRegressor(n_estimators = 100,max_depth=depth,max_features="sqrt")  
-    random_forest_model.fit(X_train, y_train)
-    return random_forest_model
-  except Exception as e:
-   print(str(e))
+def rf_model(feature_count):
+  max_dpth=round(np.log2(feature_count))
+  random_forest_model = RandomForestRegressor(n_estimators = 100,max_depth=max_dpth,max_features="sqrt")
+  #log(No.of.Features)/log(2) => Max Depth.
+  random_forest_model.fit(X_train, y_train)
+  random_forest_model.score(X_test,y_test)
+  return random_forest_model
 
 """**Function for XGBoost Regression**"""
 
 import xgboost as xgb
 from sklearn.model_selection import cross_val_score
-previous=0
-previous_cross_val=-5
-def xgb_reg(X_train,y_train):
-  try:
-    model = xgb.XGBRegressor(learning_rate = 0.01, n_estimators=100,verbosity = 0) # initialise the model
-    for lr in [0.01,0.02,0.03,0.04,0.05,0.1,0.11,0.12,0.13,0.14,0.15,0.2,0.5,0.7,1]:
-      model = xgb.XGBRegressor(learning_rate = lr, n_estimators=100,verbosity = 0) # initialise the model
-      model.fit(X_train,y_train) #train the model
-      cross_val=np.mean(cross_val_score(model, X_train, y_train, cv=10))
-      train_score=model.score(X_train,y_train)
-      print("Learning rate : ", lr, " Train score : ", train_score, " Cross-Val score : ",cross_val )
-      if (cross_val>0 and train_score>0 and previous_cross_val>0) and(cross_val > train_score or previous_cross_val>cross_val):
-        model = xgb.XGBRegressor(learning_rate = previous, n_estimators=100,verbosity = 0)
-        model.fit(X_train,y_train)
-        print("Learning rate : ", previous, " Train score : ", model.score(X_train,y_train), " Cross-Val score : ",np.mean(cross_val_score(model, X_train, y_train, cv=10)) )
-        break     
-      previous=lr
-      previous_cross_val=cross_val
-    return model
-  except Exception as e:
-   print(str(e))
+def xb_model():
+  xgb_best_lr=pd.DataFrame(columns=['Cross_val','Learning_rate'])
+  for lr in [0.01,0.02,0.03,0.04,0.05,0.1,0.11,0.12,0.13,0.14,0.15,0.2,0.5,0.7,1]:
+    model = xgb.XGBRegressor(learning_rate = lr, n_estimators=100,verbosity = 0) # initialise the model
+    model.fit(X_train,y_train) #train the model
+    print("Learning rate : ", lr, " Train score : ", model.score(X_train,y_train), " Cross-Val score : ", np.mean(cross_val_score(model, X_train, y_train, cv=10)))
+    cross_val=round(np.mean(cross_val_score(model, X_train, y_train, cv=10)),2)
+    xgb_best_lr.loc[cross_val]=[cross_val,lr]
+  best_learn_rate=xgb_best_lr.loc[xgb_best_lr.Cross_val.max()][1]
+  print('Best_Learn_Rate: ',best_learn_rate) 
+  xgb_model = xgb.XGBRegressor(learning_rate = best_learn_rate,n_estimators=100, verbosity = 0)
+  xgb_model.fit(X_train,y_train) 
+  xgb_model.score(X_test, y_test) 
+  return xgb_model
 
 """**Function to Evaluate the Models and Get the Best Model Based on R2 Score**"""
 
 from sklearn.metrics import r2_score
 
-def get_best_model_basedOn_r2(model_list,X_test,y_test):
+def get_models_r2(model_list,X_test,y_test):
   try:
     r2_score_list={}
     #Compute R2 for the all the models
@@ -396,10 +406,28 @@ def get_best_model_basedOn_r2(model_list,X_test,y_test):
     for i in model_list:
       y_pred = model_list[i].predict(X_test)
       r2_score_list[r2_score(y_test,y_pred)]=i
-      print("Compare which model has best R2")
-  #Compare which model has best R2:
+    return r2_score_list
+  
+  except Exception as e:
+    print(str(e))
+
+"""**Lets Build the Models and find which is best among themselves based on R2 Score.**"""
+
+def build_all_models():
+  try:
+    model_list={}
+    print("Building Decision Tree Model")
+    model_list["DecisionTreeRegressor"]=dt_model()
+    print("Building RandomForest Model")
+    model_list["RandomForestRegressor"]=rf_model(len(features))
+    print("Building XGBoost Model")
+    model_list["XGBRegressor"]=xb_model()
+
+    r2_score_list=get_models_r2(model_list,X_test,y_test)
+    #Compare which model has best R2:
     best_r2=-1
     first_model=0
+    print("Compare which model has best R2")
     for i in r2_score_list:
         if first_model==0:
           best_r2=i
@@ -412,55 +440,103 @@ def get_best_model_basedOn_r2(model_list,X_test,y_test):
     print("Best Model based on R2_score is : ",r2_score_list[best_r2], " and its R2_Score is ",str(best_r2))
     print("\n******************************************************")
 
+    
+    x=r2_score_list.values()
+    y=r2_score_list.keys()
+    
+    plt.title("Models v/s R2 Score")
+    plt.xlabel("Models")
+    plt.ylabel("R2-Score")
+    plt.xticks(rotation=90)
+    plt.bar(x,y)
+
     return model_list[r2_score_list[best_r2]]
-  except Exception as e:
-    print(str(e))
+  except Exception as error:
+    print(error)
 
-model_list={}
-print("Building DecisionTree Model")
-model=decision_tree_reg(X_train,y_train,X_test,y_test)
-model_list["DecisionTreeRegressor"]=model
-print("Building Random Forest Model")
-model=random_forest_reg(X_train,y_train)
-model_list["RandomForestRegressor"]=model
-print("Building XGBoost Model")
-model=xgb_reg(X_train,y_train)
-model_list["XGBRegressor"]=model
+"""**Lets Build the Models and find which is best Among ThemSelves.**"""
 
-Best_Model=get_best_model_basedOn_r2(model_list,X_test,y_test)
+Best_Model=build_all_models() # Build All Models and get the Best model based on R2 Score.
 
-"""Above Built the Multiple Models and Found the Best out of it based on R2_score.
-
-**Lets Predict the Data with the Best Model identified**
-"""
+"""**Lets Predict the Data with the Best Model identified**"""
 
 y_predict=Best_Model.predict(X_test)
 
-df.columns
-
-"""**Add the Act_Sales_Price,Predicted_Sales_Price & Difference_Per (to calulate the actual diffrence between actual and predicted price) to the Test DataFrame for Comparision.**"""
-
-df["Act_Sales_Price"]=y_test
-df["Predicted_Sales_Price"]=y_predict
+x=df['AREA'].map({1:"Karapakkam",2:"Adyar",3:"Chrompet",4:"Velachery",5:"KK Nagar",6:"Anna Nagar",7:"T Nagar"})
+y=y_test
+plt.title("Actual Price v/s Sales Price")
+plt.xticks(rotation=90)
+plt.bar(x,y,color='red',label='Actual')
+plt.bar(x,y_predict,label='Predicted')
+plt.legend(loc='best')
 
 """# **Final Result**
 
 **As per our Requirement lets Find the Price Range for the House.**
 """
 
-Absolute_Difference=abs(df["Act_Sales_Price"]-df["Predicted_Sales_Price"])   
-price_from=(df["Predicted_Sales_Price"]-Absolute_Difference).astype(int).astype(str)
-price_to=(df["Predicted_Sales_Price"]+Absolute_Difference).astype(int).astype(str)
-df["Difference_PER"]=round((abs(df["Act_Sales_Price"]-df["Predicted_Sales_Price"])/df["Act_Sales_Price"])*100,2)
-df["Predicted_Price_Range"]=price_from+" to "+price_to
-
-"""Above we find the Absoute diffrence between the Actual Sales price and Predicted Sales price. Then find the lower price(Predicted price - absoulte difference amount) and the upper price(Predicted price + absoulte difference amount) """
+df["Predicted_Sales_Price"]=y_predict.astype(int)
 
 df.AREA=df.AREA.map({1:"Karapakkam",2:"Adyar",3:"Chrompet",4:"Velachery",5:"KK Nagar",6:"Anna Nagar",7:"T Nagar"})
 
-df[['AREA','INT_SQFT','N_BEDROOM','DATE_BUILD','PARK_FACIL','DATE_SALE','Predicted_Price_Range','Difference_PER']]
+"""To Calculate the Price Range, Lets get the Standard Deviation of the Predicted_Sales_Price by AREA wise and then subract the SD value with Predicted_Sales_Price to find the Lower Price Range and use the Predicted_Sales_Price value as the Upper Price range."""
 
-Len=len(df)
-print("Total.No.Of.Records: "+str(Len))
-print("No.Of.Records (Diff % > 3): "+str(len(df[df.Difference_PER>=3])))
-print("No.Of.Records (Diff % < 3): "+str(len(df[df.Difference_PER<3])))
+df['Predicted_Sales_Price_Range']=0
+
+round(df[df['AREA']=='Karapakkam'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='Karapakkam'] - 2038).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='Karapakkam']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='Karapakkam'].astype(str)
+
+round(df[df['AREA']=='Adyar'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='Adyar'] - 2557).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='Adyar']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='Adyar'].astype(str)
+
+round(df[df['AREA']=='Chrompet'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='Chrompet'] - 2013).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='Chrompet']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='Chrompet'].astype(str)
+
+round(df[df['AREA']=='Velachery'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='Velachery'] - 2013).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='Velachery']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='Velachery'].astype(str)
+
+round(df[df['AREA']=='KK Nagar'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='KK Nagar'] - 1381).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='KK Nagar']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='KK Nagar'].astype(str)
+
+round(df[df['AREA']=='Anna Nagar'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='Anna Nagar'] - 1925).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='Anna Nagar']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='Anna Nagar'].astype(str)
+
+round(df[df['AREA']=='T Nagar'].Predicted_Sales_Price.std())
+
+df_lower_range=(df.Predicted_Sales_Price[df['AREA']=='T Nagar'] - 2055).astype(int)
+df.Predicted_Sales_Price_Range[df['AREA']=='T Nagar']= df_lower_range.astype(str) +"  -  "+df.Predicted_Sales_Price[df['AREA']=='T Nagar'].astype(str)
+
+df.head()
+
+"""**Important Features Based on the Best Model**"""
+
+Feature_imp=pd.DataFrame({'Important_Feature':Best_Model.feature_importances_},index=features)
+Feature_imp=Feature_imp.Important_Feature.sort_values(ascending=False)
+x_feature_imp=Feature_imp.index
+y_feature_imp=Feature_imp
+plt.title("Important Features based on Best Model")
+plt.xticks(rotation=90)
+plt.bar(x_feature_imp,y_feature_imp)
+
+"""Builders should consider the below points while building the houses, this will help them to sell the houses quickly.
+
+*   Choose the AREA which is popular or near to popular area.
+*   Houses with Commercial space will be added advantage.
+*   Parking Facility is must.
+*   The street should have gravel or paving stone.
+*   Provide Maximum Quality Space.
+*   Build atleast two rooms and with attached Bathroom(s).
+*   Make sure the availability of Basic utilites like Sewage,,Power-Backup,Lift,Security...
+"""
